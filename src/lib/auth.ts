@@ -2,9 +2,18 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "fallback-secret-change-me"
-);
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET must be set to a strong value (min 32 chars) in production");
+    }
+    return "dev-only-insecure-secret-change-me-now!!";
+  }
+  return secret;
+}
+
+const JWT_SECRET = new TextEncoder().encode(getJwtSecret());
 
 export type OrganizationRole = "OWNER" | "ADMIN" | "MANAGER" | "STAFF";
 
