@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -75,8 +75,8 @@ enum OrganizationRole {
 
 model Invitation {
   id             String           @id @default(cuid())
-  organizationId String
   email          String
+  organizationId String
   role           OrganizationRole @default(MANAGER)
   token          String           @unique
   invitedById    String
@@ -129,8 +129,8 @@ model Unit {
   bedrooms    Int        @default(1)
   bathrooms   Float      @default(1)
   sqft        Int?
-  rentAmount  Decimal
-  deposit     Decimal    @default(0)
+  rentAmount  Decimal    @db.Decimal(12, 2)
+  deposit     Decimal    @default(0) @db.Decimal(12, 2)
   status      UnitStatus @default(VACANT)
   description String?
   amenities   String?
@@ -153,18 +153,18 @@ enum UnitStatus {
 }
 
 model Tenant {
-  id             String   @id @default(cuid())
-  organizationId String
-  firstName      String
-  lastName       String
-  email          String
-  phone          String?
+  id               String   @id @default(cuid())
+  organizationId   String
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
   emergencyContact String?
-  emergencyPhone String?
-  idNumber       String?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  emergencyPhone   String?
+  idNumber         String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leases       Lease[]
@@ -182,8 +182,8 @@ model Lease {
   createdById    String?
   startDate      DateTime
   endDate        DateTime
-  rentAmount     Decimal
-  depositAmount  Decimal     @default(0)
+  rentAmount     Decimal     @db.Decimal(12, 2)
+  depositAmount  Decimal     @default(0) @db.Decimal(12, 2)
   paymentDueDay  Int         @default(1)
   status         LeaseStatus @default(ACTIVE)
   terms          String?
@@ -217,7 +217,7 @@ model Payment {
   id             String        @id @default(cuid())
   organizationId String
   leaseId        String
-  amount         Decimal
+  amount         Decimal       @db.Decimal(12, 2)
   type           PaymentType   @default(RENT)
   status         PaymentStatus @default(PENDING)
   dueDate        DateTime
@@ -267,7 +267,7 @@ model MaintenanceRequest {
   assignedToId   String?
   reportedAt     DateTime          @default(now())
   completedAt    DateTime?
-  cost           Decimal?
+  cost           Decimal?          @db.Decimal(12, 2)
   notes          String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
