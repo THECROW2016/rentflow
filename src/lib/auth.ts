@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 function getJwtKey() {
   const secret = process.env.JWT_SECRET;
@@ -20,6 +21,16 @@ export type SessionUser = {
   organizationId: string;
   organizationName: string;
   role: OrganizationRole;
+};
+
+const GUEST: SessionUser = {
+  id: "guest",
+  email: "guest@rentflow.local",
+  firstName: "Guest",
+  lastName: "User",
+  organizationId: "guest",
+  organizationName: "RentFlow",
+  role: "OWNER",
 };
 
 export async function hashPassword(password: string) {
@@ -47,11 +58,53 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
   }
 }
 
-export async function getSession(): Promise<SessionUser | null> {
-  const store = await cookies();
-  const token = store.get("rentflow_session")?.value;
-  if (!token) return null;
-  return verifyToken(token);
+/** Always returns a session — uses cookie if present, else first org / guest. */
+export async function getSession(): Promise<SessionUser> {
+  try {
+    const store = await cookies();
+    const token = store.get("rentflow_session")?.value;
+    if (token) {
+      const user = await verifyToken(token);
+      if (user) return user;
+    }
+  } catch {
+    /* no cookies available */
+  }
+
+  try {
+    const org = await prisma.organization.findFirst({
+      orderBy: { createdAt: "asc" },
+      include: {
+        members: {
+          take: 1,
+          include: { user: true },
+        },
+      },
+    });
+    if (org) {
+      const member = org.members[0];
+      if (member) {
+        return {
+          id: member.user.id,
+          email: member.user.email,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          organizationId: org.id,
+          organizationName: org.name,
+          role: member.role as OrganizationRole,
+        };
+      }
+      return {
+        ...GUEST,
+        organizationId: org.id,
+        organizationName: org.name,
+      };
+    }
+  } catch {
+    /* DB not ready */
+  }
+
+  return GUEST;
 }
 
 export async function setSession(user: SessionUser) {
