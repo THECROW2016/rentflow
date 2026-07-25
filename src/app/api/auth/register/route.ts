@@ -6,32 +6,59 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().email(),
-  password: z.string().min(8),
-  organizationName: z.string().min(2),
+  firstName: z.string().trim().min(1, "First name is required").max(80),
+  lastName: z.string().trim().min(1, "Last name is required").max(80),
+  email: z.string().trim().email("Invalid email").max(255),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  organizationName: z.string().trim().min(2, "Organization name is required").max(120),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
+
     const { ok } = rateLimit(`register:${ip}`, 5, 60_000);
     if (!ok) {
-      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+      return NextResponse.json(
+        { error: "Too many attempts. Try again later." },
+        { status: 429 }
+      );
     }
 
-    const body = await req.json();
-    const data = schema.parse(body);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors[0]?.message || "Invalid input";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const data = parsed.data;
+    const email = data.email.toLowerCase();
 
     const existing = await prisma.user.findUnique({
-      where: { email: data.email.toLowerCase() },
+      where: { email },
     });
     if (existing) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Email already registered" },
+        { status: 409 }
+      );
     }
 
     let slug = slugify(data.organizationName);
+    if (!slug) {
+      slug = `org-${Date.now().toString(36)}`;
+    }
+
     const slugExists = await prisma.organization.findUnique({ where: { slug } });
     if (slugExists) {
       slug = `${slug}-${Date.now().toString(36)}`;
@@ -44,13 +71,13 @@ export async function POST(req: NextRequest) {
         data: {
           name: data.organizationName,
           slug,
-          email: data.email.toLowerCase(),
+          email,
         },
       });
 
       const user = await tx.user.create({
         data: {
-          email: data.email.toLowerCase(),
+          email,
           passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
@@ -82,11 +109,20 @@ export async function POST(req: NextRequest) {
       success: true,
       organization: result.org.name,
     });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  } catch (err: unknown) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code?: string }).code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "Email or organization already exists" },
+        { status: 409 }
+      );
     }
-    console.error(err);
+
+    console.error("[register]", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
