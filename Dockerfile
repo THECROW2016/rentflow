@@ -2,7 +2,6 @@ FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
-# Ignore scripts so postinstall prisma generate does not run without schema
 RUN npm install --ignore-scripts
 
 FROM node:20-bookworm-slim AS builder
@@ -11,9 +10,8 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# Dummy values only for compile-time; real secrets come from Railway Variables at runtime
 ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
-RUN npx prisma generate && npx next build
+RUN mkdir -p public && npx prisma generate && npx next build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
