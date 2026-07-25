@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, setSession } from "@/lib/auth";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
   email: z.string().email(),
@@ -10,6 +11,12 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const { ok } = rateLimit(`login:${ip}`, 10, 60_000);
+    if (!ok) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
+
     const body = await req.json();
     const { email, password } = schema.parse(body);
 
@@ -24,10 +31,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
-      return NextResponse.json(
-        { error: "Invalid email or password" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
     if (!user.isActive) {
@@ -36,10 +40,7 @@ export async function POST(req: NextRequest) {
 
     const membership = user.memberships[0];
     if (!membership) {
-      return NextResponse.json(
-        { error: "No organization found for this user" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No organization found for this user" }, { status: 403 });
     }
 
     await setSession({
