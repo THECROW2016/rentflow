@@ -1,51 +1,28 @@
-# RentFlow — Multi-Tenant Rental House Management System
+# RentFlow
 
-A modern, production-ready **multi-tenant** web application for landlords and property management companies.
+Production-ready multi-tenant rental house management system.
 
-## Features
+## Stack
 
-- **True multi-tenancy**: Each organization (landlord / agency) has fully isolated data via `organizationId` on every domain table.
-- **Role-based access**: OWNER · ADMIN · MANAGER · STAFF
-- **Properties & Units**: Create properties and units with status, rent, deposit.
-- **Tenants & Leases**: Add tenants, create leases (auto-marks unit occupied).
-- **Payments**: Record payments, **one-click Mark Paid**, overdue detection.
-- **Maintenance tickets**: Create tickets, Start work / Complete / Cancel workflow.
-- **Dashboard**: Occupancy, expected rent, overdue payments, open tickets.
-- **Auth**: JWT in httpOnly cookie, bcrypt passwords, organization creation on signup.
-- **Full CRUD forms**: Modal-based create forms on every major page (Server Actions + Zod).
+- Next.js 15.2.8 · Prisma · PostgreSQL · Tailwind 3 · Zod · jose · bcryptjs
 
-## Tech Stack
-
-| Layer        | Choice                          |
-|--------------|---------------------------------|
-| Framework    | Next.js 15 (App Router)         |
-| Language     | TypeScript                      |
-| Database     | SQLite (dev) / PostgreSQL ready |
-| ORM          | Prisma                          |
-| Auth         | Custom JWT (jose) + bcryptjs    |
-| UI           | Tailwind CSS v4 + Lucide icons  |
-| Validation   | Zod                             |
-
-## Quick Start
+## Local
 
 ```bash
 npm install
 cp .env.example .env
-npx prisma generate
+# set DATABASE_URL + JWT_SECRET
 npx prisma db push
 npx tsx prisma/seed.ts
 npm run dev
 ```
 
-Open http://localhost:3000
+Demo: `owner@amaniproperties.co.ke` / `password123`
 
-### Demo accounts (password: `password123`)
+## Railway
 
-| Role    | Email                          |
-|---------|--------------------------------|
-| Owner   | owner@amaniproperties.co.ke    |
-| Manager | manager@amaniproperties.co.ke  |
-
-## License
-
-MIT
+1. Deploy from GitHub
+2. Add PostgreSQL
+3. Variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `JWT_SECRET` (32+ chars), `NEXT_PUBLIC_APP_URL`, `NODE_ENV=production`
+4. Pre-deploy: `npx prisma db push --skip-generate` (in railway.toml)
+5. Generate domain · optional seed via `railway run npx tsx prisma/seed.ts`
