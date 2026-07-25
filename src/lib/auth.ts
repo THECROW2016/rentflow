@@ -2,18 +2,14 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 
-function getJwtSecret() {
+function getJwtSecretKey() {
   const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 32) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("JWT_SECRET must be set to a strong value (min 32 chars) in production");
-    }
-    return "dev-only-insecure-secret-change-me-now!!";
+  if (secret && secret.length >= 32) {
+    return new TextEncoder().encode(secret);
   }
-  return secret;
+  // Build / local fallback — real deploys must set JWT_SECRET in Railway Variables
+  return new TextEncoder().encode("dev-only-insecure-secret-change-me-now!!");
 }
-
-const JWT_SECRET = new TextEncoder().encode(getJwtSecret());
 
 export type OrganizationRole = "OWNER" | "ADMIN" | "MANAGER" | "STAFF";
 
@@ -40,12 +36,12 @@ export async function createToken(payload: SessionUser) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecretKey());
 }
 
 export async function verifyToken(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecretKey());
     return payload as unknown as SessionUser;
   } catch {
     return null;

@@ -1,11 +1,13 @@
 [variables]
 NIXPACKS_NODE_VERSION = "20"
+JWT_SECRET = "build-time-placeholder-secret-min-32-chars!!"
+DATABASE_URL = "postgresql://build:build@localhost:5432/build"
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-9_x", "openssl"]
 
 [phases.install]
-cmds = ["npm ci || npm install"]
+cmds = ["npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
