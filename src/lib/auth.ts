@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 
-function getJwtSecretKey() {
+function getJwtKey() {
   const secret = process.env.JWT_SECRET;
   if (secret && secret.length >= 32) {
     return new TextEncoder().encode(secret);
@@ -35,12 +35,12 @@ export async function createToken(payload: SessionUser) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(getJwtSecretKey());
+    .sign(getJwtKey());
 }
 
 export async function verifyToken(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, getJwtSecretKey());
+    const { payload } = await jwtVerify(token, getJwtKey());
     return payload as unknown as SessionUser;
   } catch {
     return null;
@@ -48,16 +48,16 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("rentflow_session")?.value;
+  const store = await cookies();
+  const token = store.get("rentflow_session")?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
 export async function setSession(user: SessionUser) {
   const token = await createToken(user);
-  const cookieStore = await cookies();
-  cookieStore.set("rentflow_session", token, {
+  const store = await cookies();
+  store.set("rentflow_session", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -67,12 +67,8 @@ export async function setSession(user: SessionUser) {
 }
 
 export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete("rentflow_session");
-}
-
-export async function requireAuth(): Promise<SessionUser | null> {
-  return getSession();
+  const store = await cookies();
+  store.delete("rentflow_session");
 }
 
 export function hasRole(session: SessionUser, roles: OrganizationRole[]) {
