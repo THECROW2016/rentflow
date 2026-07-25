@@ -1,0 +1,298 @@
+// RentFlow - Multi-tenant Rental House Management System
+// Shared database + organizationId isolation strategy
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logo        String?
+  email       String?
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     OrganizationMember[]
+  properties  Property[]
+  tenants     Tenant[]
+  leases      Lease[]
+  payments    Payment[]
+  maintenance MaintenanceRequest[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  phone         String?
+  avatar        String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   OrganizationMember[]
+  createdLeases Lease[]              @relation("LeaseCreatedBy")
+  assignedMaint MaintenanceRequest[] @relation("AssignedTo")
+  invitations   Invitation[]         @relation("InvitedBy")
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MANAGER)
+  joinedAt       DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrganizationRole @default(MANAGER)
+  token          String           @unique
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@map("invitations")
+}
+
+model Property {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  address        String
+  city           String
+  state          String?
+  zipCode        String?
+  country        String       @default("US")
+  type           PropertyType @default(APARTMENT)
+  description    String?
+  imageUrl       String?
+  yearBuilt      Int?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units        Unit[]
+
+  @@index([organizationId])
+  @@map("properties")
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  CONDO
+  TOWNHOUSE
+  COMMERCIAL
+  OTHER
+}
+
+model Unit {
+  id          String     @id @default(cuid())
+  propertyId  String
+  unitNumber  String
+  bedrooms    Int        @default(1)
+  bathrooms   Float      @default(1)
+  sqft        Int?
+  rentAmount  Decimal
+  deposit     Decimal    @default(0)
+  status      UnitStatus @default(VACANT)
+  description String?
+  amenities   String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases   Lease[]
+
+  @@unique([propertyId, unitNumber])
+  @@index([propertyId])
+  @@map("units")
+}
+
+enum UnitStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+model Tenant {
+  id             String   @id @default(cuid())
+  organizationId String
+  firstName      String
+  lastName       String
+  email          String
+  phone          String?
+  emergencyContact String?
+  emergencyPhone String?
+  idNumber       String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leases       Lease[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("tenants")
+}
+
+model Lease {
+  id             String      @id @default(cuid())
+  organizationId String
+  unitId         String
+  tenantId       String
+  createdById    String?
+  startDate      DateTime
+  endDate        DateTime
+  rentAmount     Decimal
+  depositAmount  Decimal     @default(0)
+  paymentDueDay  Int         @default(1)
+  status         LeaseStatus @default(ACTIVE)
+  terms          String?
+  documentUrl    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit         Unit         @relation(fields: [unitId], references: [id])
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  createdBy    User?        @relation("LeaseCreatedBy", fields: [createdById], references: [id])
+  payments     Payment[]
+  maintenance  MaintenanceRequest[]
+
+  @@index([organizationId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("leases")
+}
+
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  PENDING
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  leaseId        String
+  amount         Decimal
+  type           PaymentType   @default(RENT)
+  status         PaymentStatus @default(PENDING)
+  dueDate        DateTime
+  paidAt         DateTime?
+  method         String?
+  reference      String?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lease        Lease        @relation(fields: [leaseId], references: [id])
+
+  @@index([organizationId])
+  @@index([leaseId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("payments")
+}
+
+enum PaymentType {
+  RENT
+  DEPOSIT
+  LATE_FEE
+  UTILITY
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+}
+
+model MaintenanceRequest {
+  id             String            @id @default(cuid())
+  organizationId String
+  leaseId        String?
+  unitId         String?
+  title          String
+  description    String
+  priority       Priority          @default(MEDIUM)
+  status         MaintenanceStatus @default(OPEN)
+  category       String?
+  assignedToId   String?
+  reportedAt     DateTime          @default(now())
+  completedAt    DateTime?
+  cost           Decimal?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lease        Lease?       @relation(fields: [leaseId], references: [id])
+  assignedTo   User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([priority])
+  @@map("maintenance_requests")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PARTS
+  COMPLETED
+  CANCELLED
+}
