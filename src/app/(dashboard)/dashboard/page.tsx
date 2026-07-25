@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate, isOverdue } from "@/lib/utils";
 import { Home, Users, CreditCard, Wrench, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
+import type { ElementType } from "react";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -107,7 +108,7 @@ export default async function DashboardPage() {
           </div>
           <div className="divide-y divide-slate-100">
             {openMaintenance.length === 0 ? (
-              <p className="p-5 text-sm text-slate-500">No open tickets 🎉</p>
+              <p className="p-5 text-sm text-slate-500">No open tickets</p>
             ) : (
               openMaintenance.map((m) => (
                 <div key={m.id} className="px-5 py-3.5">
@@ -124,7 +125,19 @@ export default async function DashboardPage() {
   );
 }
 
-function KpiCard({ title, value, sub, icon: Icon, color }: { title: string; value: string; sub: string; icon: React.ElementType; color: string }) {
+function KpiCard({
+  title,
+  value,
+  sub,
+  icon: Icon,
+  color,
+}: {
+  title: string;
+  value: string;
+  sub: string;
+  icon: ElementType;
+  color: string;
+}) {
   const colors: Record<string, string> = {
     blue: "bg-blue-50 text-blue-600",
     indigo: "bg-indigo-50 text-indigo-600",
