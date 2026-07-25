@@ -7,7 +7,6 @@ function getJwtSecretKey() {
   if (secret && secret.length >= 32) {
     return new TextEncoder().encode(secret);
   }
-  // Build / local fallback — real deploys must set JWT_SECRET in Railway Variables
   return new TextEncoder().encode("dev-only-insecure-secret-change-me-now!!");
 }
 
