@@ -1,8 +1,9 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json ./
+# Ignore scripts so postinstall prisma generate does not run without schema
+RUN npm install --ignore-scripts
 
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
@@ -10,16 +11,17 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV JWT_SECRET=build-time-placeholder-secret-min-32-chars!!
-ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
-RUN npx prisma generate && npm run build
+# Dummy values only for compile-time; real secrets come from Railway Variables at runtime
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
+RUN npx prisma generate && npx next build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/* \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
@@ -32,4 +34,4 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-CMD ["npm", "run", "start"]
+CMD ["npx", "next", "start"]
